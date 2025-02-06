@@ -183,8 +183,8 @@ if __name__ == "__main__":
         if len(bkg_samples) >0:
             for bkg_sample in bkg_samples:
                 if bkg_sample.upper() == "DY": # enforce upper case to prevent confusion
-                    # new_sample_list.append("dy_M-50")
-                    new_sample_list.append("dy_M-100To200")
+                    new_sample_list.append("dy_M-50")
+                    # new_sample_list.append("dy_M-100To200")
                     # new_sample_list.append("dy_VBF_filter")
                     # new_sample_list.append("dy_m105_160_vbf_amc")
                     # new_sample_list.append("dy_VBF_filter_customJMEoff")
@@ -193,8 +193,7 @@ if __name__ == "__main__":
                     # new_sample_list.append("dy_VBF_filter_Amandeep10_6_26")
                     # new_sample_list.append("dy_VBF_filter_Amandeep10_6_32")
                     # new_sample_list.append("dy_VBF_filter_Amandeep_fromGenSim")
-                    # new_sample_list.append("dy_VBF_filter_fromGridpack")
-                    
+                    #new_sample_list.append("dy_VBF_filter_fromGridpack")
                     # Run3 specific datasets:
                     # new_sample_list.append("dy_M-50To120")
                     # new_sample_list.append("dy_M-120To200")
