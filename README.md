@@ -4,7 +4,7 @@ setup:
 ```bash
 git clone https://github.com/aman0404/CMSAnalysisCoffea.git
 cd CMSAnalysisCoffea
-conda env create -f conda_envs/env.yml 
+conda activate /depot/cms/kernels/root632 
 ```
 If accessing datasets via `xRootD` will be needed:
 ```bash
