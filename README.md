@@ -1,9 +1,9 @@
-## 🐍 Copperhead V2, - Columnar Parallel Pythonic framEwork for Run3 H&rarr;µµ Decay search
+## 🐍 Copperhead V2, - Columnar Parallel Pythonic framEwork for Run3 high-mass dilepton search
 
 setup:
 ```bash
-git clone https://github.com/green-cabbage/copperheadV2.git
-cd copperheadV2
+git clone https://github.com/aman0404/CMSAnalysisCoffea.git
+cd CMSAnalysisCoffea
 conda env create -f conda_envs/env.yml 
 ```
 If accessing datasets via `xRootD` will be needed:
