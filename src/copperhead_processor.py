@@ -181,13 +181,14 @@ class EventProcessor(processor.ProcessorABC):
         self.test_mode = test_mode
         dict_update = {
             # "hlt" :["IsoMu24"],
+            "apply_LHE_Filter" : False,
             "do_trigger_match" : False, # False
-            "do_roccor" : True,# True
-            "do_fsr" : True, # True
-            "do_geofit" : True, # True
-            "do_beamConstraint": True, # if True, override do_geofit
-            "do_nnlops" : True,
-            "do_pdf" : True,
+            "do_roccor" : False,# True
+            "do_fsr" : False, # True
+            "do_geofit" : False, # True
+            "do_beamConstraint": False, # if True, override do_geofit
+            "do_nnlops" : False,
+            "do_pdf" : False,
         }
         self.config.update(dict_update)
         
@@ -205,12 +206,10 @@ class EventProcessor(processor.ProcessorABC):
             self.zpt_path = "zpt_weights_all"
         # Calibration of event-by-event mass resolution
         for mode in ["Data", "MC"]:
-            if "2016" in year: # 2016PreVFP, 2016PostVFP, 2016_RERECO
+            if "2016" in year:
                 yearUL = "2016"
             elif ("22" in year) or ("23" in year):# temporary solution until I can generate my own dimuon mass resolution
                 yearUL = "2018"
-            elif "RERECO" in year: # 2017_RERECO. 2018_RERECO
-                yearUL=year.replace("_RERECO","")
             else:
                 yearUL=year #Work around before there are seperate new files for pre and postVFP
             label = f"res_calib_{mode}_{yearUL}"
@@ -240,7 +239,8 @@ class EventProcessor(processor.ProcessorABC):
         # print("testJetVector right as process starts")
         # testJetVector(events.Jet)
         
-        event_filter = ak.ones_like(events.HLT.IsoMu24) # 1D boolean array to be used to filter out bad events
+        #event_filter = ak.ones_like(events.HLT.IsoMu24) # 1D boolean array to be used to filter out bad events
+        event_filter = ak.ones_like(events.event) # 1D boolean array to be used to filter out bad events
         dataset = events.metadata['dataset']
         print(f"dataset: {dataset}")
         print(f"events.metadata: {events.metadata}")
@@ -248,7 +248,7 @@ class EventProcessor(processor.ProcessorABC):
         is_mc = events.metadata['is_mc']
         print(f"NanoAODv: {NanoAODv}")
         # LHE cut original start -----------------------------------------------------------------------------
-        if dataset == 'dy_M-50': # if dy_M-50, apply LHE cut
+        if ((self.config["apply_LHE_Filter"] == True ) and (dataset == 'dy_M-50')): # if dy_M-50, apply LHE cut
             print("doing dy_M-50 LHE cut!")
             LHE_particles = events.LHEPart #has unique pdgIDs of [ 1,  2,  3,  4,  5, 11, 13, 15, 21]
             bool_filter = (abs(LHE_particles.pdgId) == 11) | (abs(LHE_particles.pdgId) == 13) | (abs(LHE_particles.pdgId) == 15)
@@ -290,13 +290,7 @@ class EventProcessor(processor.ProcessorABC):
             """
             isoMu_filterbit = 2
             mu_id = 13
-            # pt_threshold = 24 
-            # if "2017" in year: # line 371 of AN-19-124
-            #     pt_threshold = 29
-            # else: # for 2016, 2018 dunno about Run3
-            #     pt_threshold = 26
-            pt_threshold = self.config["muon_leading_pt"] # line 371 of AN-19-124. "muon_leading_pt" is deceptive name, but that's where we saved the threshold
-
+            pt_threshold = 24 
             dr_threshold = 0.1 # for matching gen muons to reco muons
             IsoMu24_muons = (events.TrigObj.id == mu_id) &  \
                         ((events.TrigObj.filterBits & isoMu_filterbit) == isoMu_filterbit) & \
@@ -327,8 +321,12 @@ class EventProcessor(processor.ProcessorABC):
 
             
         # # Apply HLT to both Data and MC. NOTE: this would probably be superfluous if you already do trigger matching
-        for HLT_str in self.config["hlt"]:
-            event_filter = event_filter & events.HLT[HLT_str]
+        HLT_filter = ak.zeros_like(event_filter, dtype="bool")  # start with 1D of Falses
+
+        for HLT_str in self.config["mu_hlt"]:
+            HLT_filter = HLT_filter | events.HLT[HLT_str]
+
+        event_filter = event_filter & HLT_filter
 
 
         # ------------------------------------------------------------#
@@ -374,7 +372,11 @@ class EventProcessor(processor.ProcessorABC):
         events["Muon", "pt_raw"] = ak.ones_like(events.Muon.pt) * events.Muon.pt
         events["Muon", "eta_raw"] = ak.ones_like(events.Muon.eta) * events.Muon.eta
         events["Muon", "phi_raw"] = ak.ones_like(events.Muon.phi) * events.Muon.phi
-        events["Muon", "pfRelIso04_all_raw"] = ak.ones_like(events.Muon.pfRelIso04_all) * events.Muon.pfRelIso04_all
+        events["Muon", "Iso_raw"] = ak.ones_like(events.Muon.tkRelIso) * events.Muon.tkRelIso 
+
+        #applying track relative isolation for high-pT muons
+        #events["Muon", "pfRelIso04_all_raw"] = ak.ones_like(events.Muon.pfRelIso04_all) * events.Muon.pfRelIso04_all
+
         # attempt at fixing fsr issue end ---------------------------------------------------------------
     
         
@@ -394,7 +396,7 @@ class EventProcessor(processor.ProcessorABC):
             events["Muon", "pt"] = events.Muon.pt_fsr
             events["Muon", "eta"] = events.Muon.eta_fsr
             events["Muon", "phi"] = events.Muon.phi_fsr
-            events["Muon", "pfRelIso04_all"] = events.Muon.iso_fsr
+            events["Muon", "tkRelIso"] = events.Muon.iso_fsr
         else:
             # if no fsr, just copy 'pt' to 'pt_fsr'
             applied_fsr = ak.zeros_like(events.Muon.pt, dtype="bool") # boolean array of Falses
@@ -443,11 +445,15 @@ class EventProcessor(processor.ProcessorABC):
         # original muon selection ------------------------------------------------
         muon_selection = (
             (events.Muon.pt_raw > self.config["muon_pt_cut"])
-            # (events.Muon.pt > self.config["muon_pt_cut"]) # testing
             & (abs(events.Muon.eta_raw) < self.config["muon_eta_cut"])
-            & (events.Muon.pfRelIso04_all < self.config["muon_iso_cut"])
-            # & events.Muon[muon_id]
+            & (events.Muon.Iso_raw < self.config["muon_iso_cut"])
             & events.Muon[self.config["muon_id"]]
+            & (abs(events.Muon.dxy) < self.config["muon_dxy"])
+            & (abs(events.Muon.dz) < self.config["muon_dz"])
+            & (
+                    (events.Muon.ptErr / events.Muon.pt_raw)
+                    < self.config["muon_ptErr/pt"]
+                )
         )
         # original muon selection end ------------------------------------------------
 
@@ -469,7 +475,6 @@ class EventProcessor(processor.ProcessorABC):
             (events.Electron.pt > self.config["electron_pt_cut"])
             & (abs(events.Electron.eta) < self.config["electron_eta_cut"])
             & events.Electron[electron_id]
-            & (abs(events.Electron.eta) < 1.444) | (abs(events.Electron.eta) > 1.566)# temp addition for quick test
         )
         
         # some temporary testing code start -----------------------------------------
@@ -531,18 +536,18 @@ class EventProcessor(processor.ProcessorABC):
         # better original end ---------------------------------------------------------------
 
         # test start ----------------------------------------------------------------
-        # # NOTE: if you want to keep this method, (which I don't btw since the original
-        # # code above is conceptually more correct at this moment), you should optimize
-        # # this code, bc this was just something I put together for quick testing
-        # muons_padded = ak.pad_none(muons, target=2)
-        # sorted_args = ak.argsort(muons_padded.pt, ascending=False) # leadinig pt is ordered by pt
-        # muons_sorted = (muons_padded[sorted_args])
-        # mu1 = muons_sorted[:,0]
-        # pass_leading_pt = mu1.pt_raw > self.config["muon_leading_pt"]
-        # pass_leading_pt = ak.fill_none(pass_leading_pt, value=False) 
+        # NOTE: if you want to keep this method, (which I don't btw since the original
+        # code above is conceptually more correct at this moment), you should optimize
+        # this code, bc this was just something I put together for quick testing
+        muons_padded = ak.pad_none(muons, target=2)
+        sorted_args = ak.argsort(muons_padded.pt, ascending=False) # leadinig pt is ordered by pt
+        muons_sorted = (muons_padded[sorted_args])
+        mu1 = muons_sorted[:,0]
+        pass_leading_pt = mu1.pt_raw > self.config["muon_leading_pt"]
+        pass_leading_pt = ak.fill_none(pass_leading_pt, value=False) 
 
 
-        # event_filter = event_filter & pass_leading_pt
+        event_filter = event_filter & pass_leading_pt
         # test end -----------------------------------------------------------------------
 
         
@@ -582,7 +587,7 @@ class EventProcessor(processor.ProcessorABC):
         if is_mc and do_pu_wgt:
             for variation in pu_wgts.keys():
                 pu_wgts[variation] = ak.to_packed(pu_wgts[variation][event_filter==True])
-        # pass_leading_pt = ak.to_packed(pass_leading_pt[event_filter==True])
+        pass_leading_pt = ak.to_packed(pass_leading_pt[event_filter==True])
 
         
             
@@ -704,7 +709,7 @@ class EventProcessor(processor.ProcessorABC):
             year
         )   
         
-        do_jec = False # True       
+        do_jec = True # True       
         # do_jecunc = self.config["do_jecunc"]
         # do_jerunc = self.config["do_jerunc"]
         #testing 
@@ -904,6 +909,7 @@ class EventProcessor(processor.ProcessorABC):
         # ------------------------------------------------------------#
         out_dict = {
             "event" : events.event,
+            "HLT_filter" : HLT_filter, 
             "mu1_pt" : mu1.pt,
             "mu2_pt" : mu2.pt,
             "mu1_eta" : mu1.eta,
@@ -912,8 +918,8 @@ class EventProcessor(processor.ProcessorABC):
             "mu2_phi" : mu2.phi,
             "mu1_charge" : mu1.charge,
             "mu2_charge" : mu2.charge,
-            "mu1_iso" : mu1.pfRelIso04_all,
-            "mu2_iso" : mu2.pfRelIso04_all,
+            "mu1_iso" : mu1.Iso_raw,
+            "mu2_iso" : mu2.Iso_raw,
             "nmuons" : nmuons,
             "dimuon_mass" : dimuon.mass,
             "dimuon_pt" : dimuon.pt,
@@ -932,7 +938,7 @@ class EventProcessor(processor.ProcessorABC):
             "mu2_pt_raw" : mu2.pt_raw,
             "mu1_pt_fsr" : mu1.pt_fsr,
             "mu2_pt_fsr" : mu2.pt_fsr,
-            # "pass_leading_pt" : pass_leading_pt,
+            "pass_leading_pt" : pass_leading_pt,
         }
         if is_mc:
             mc_dict = {
@@ -1076,14 +1082,12 @@ class EventProcessor(processor.ProcessorABC):
         if test_mode:
             print(f"muons mass_resolution dpt1: {dpt1}")
         year = self.config["year"]
-        if "2016" in year: # 2016PreVFP, 2016PostVFP, 2016_RERECO
+        if "2016" in year:
             yearUL = "2016"
         elif ("22" in year) or ("23" in year):# temporary solution until I can generate my own dimuon mass resolution
             yearUL = "2018"
-        elif "RERECO" in year: # 2017_RERECO. 2018_RERECO
-            yearUL=year.replace("_RERECO","")
         else:
-            yearUL = year 
+            yearUL = self.config["year"] #Work around before there are seperate new files for pre and postVFP
         if is_mc:
             label = f"res_calib_MC_{yearUL}"
         else:
@@ -1196,7 +1200,8 @@ class EventProcessor(processor.ProcessorABC):
 
         # matched_mu_pt = jets.matched_muons.pt_fsr
         matched_mu_pt = jets.matched_muons.pt_fsr if "pt_fsr" in jets.matched_muons.fields else jets.matched_muons.pt
-        matched_mu_iso = jets.matched_muons.pfRelIso04_all
+        matched_mu_iso = jets.matched_muons.tkRelIso
+        #matched_mu_iso = jets.matched_muons.pfRelIso04_all
         matched_mu_id = jets.matched_muons[self.config["muon_id"]]
         matched_mu_pass = (
             (matched_mu_pt > self.config["muon_pt_cut"])
