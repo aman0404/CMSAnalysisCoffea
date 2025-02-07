@@ -165,6 +165,7 @@ if __name__ == "__main__":
             dataset = datasets[f"{year}_RERECO"]
         else: # normal
             dataset = datasets[year]
+            print("aman is here ", dataset)
         new_sample_list = []
        
         # take data
@@ -216,7 +217,7 @@ if __name__ == "__main__":
                     new_sample_list.append("ewk_lljj_mll50_mjj120")
                 else:
                     print(f"unknown background {bkg_sample} was given!")
-            
+        print(new_sample_list) 
         # take sig
         sig_samples = args.sig_samples
         if len(sig_samples) >0:
